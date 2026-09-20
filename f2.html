@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Reborder: Europe</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Courier New', Courier, monospace; user-select: none; }
+        body { margin: 0; background-color: #000; color: #00ff00; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        #game-container { width: 100%; max-width: 450px; height: 100vh; max-height: 850px; border: 2px solid #00ff00; background-color: #050505; position: relative; padding: 20px; display: flex; flex-direction: column; }
+        .screen { display: none; flex-direction: column; height: 100%; width: 100%; justify-content: center; align-items: center; text-align: center; }
+        .screen.active { display: flex; }
+        h1 { font-size: 2.2rem; text-shadow: 0 0 10px #00ff00; margin-bottom: 40px; letter-spacing: 2px; }
+        .btn { background: transparent; color: #00ff00; border: 2px solid #00ff00; padding: 15px 40px; margin: 10px 0; font-size: 1.2rem; cursor: pointer; width: 85%; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; box-shadow: inset 0 0 5px rgba(0,255,0,0.2); transition: all 0.2s ease; }
+        .btn:hover { background: #00ff00; color: #000; box-shadow: 0 0 15px #00ff00; }
+        .hud { display: flex; justify-content: space-between; width: 100%; padding: 12px; border-bottom: 1px dashed #00ff00; font-size: 1rem; position: absolute; top: 0; left: 0; background: #050505; z-index: 10; }
+        #map-canvas { border: 1px solid #00ff00; background: #010801; width: 100%; height: 55%; margin: 25px 0; position: relative; cursor: crosshair; touch-action: none; }
+        .canvas-label { position: absolute; font-size: 0.85rem; font-weight: bold; background: rgba(0,0,0,0.9); padding: 4px 8px; border: 1px solid #00ff00; z-index: 5; pointer-events: none; }
+        .controls { width: 100%; display: flex; flex-direction: column; align-items: center; margin-top: auto; }
+        .slider-group { width: 85%; margin: 15px 0; text-align: left; }
+        .slider-group label { display: block; margin-bottom: 8px; font-size: 1rem; }
+        .slider-group input { width: 100%; accent-color: #00ff00; background: #222; outline: none; }
+        #feedback { font-size: 1.1rem; font-weight: bold; min-height: 30px; margin: 10px 0; padding: 0 10px; color: #ffff00; }
+        #splash-text { font-size: 1.8rem; font-weight: bold; text-shadow: 0 0 10px #00ff00; animation: blink 1.5s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- 0. INTRO SPLASH SCREEN -->
+    <div id="screen-splash" class="screen active">
+        <div id="splash-text">MADE BY GOOGLE GAMES</div>
+    </div>
+
+    <!-- 1. MAIN MENU SCREEN -->
+    <div id="screen-main" class="screen">
+        <h1>REBORDER // EU</h1>
+        <button class="btn" onclick="navTo('screen-play')">PLAY</button>
+        <button class="btn" onclick="navTo('screen-settings')">SETTINGS</button>
+        <button class="btn" onclick="shutdownGame()">LEAVE</button>
+    </div>
+
+    <!-- 2. PLAY SUBMENU SCREEN -->
+    <div id="screen-play" class="screen">
+        <h1>SELECT SEQUENCE</h1>
+        <button class="btn" onclick="startGame(true)">NEW GAME</button>
+        <button class="btn" id="btn-continue" onclick="startGame(false)" style="opacity: 0.4; cursor: not-allowed;" disabled>CONTINUE GAME</button>
+        <button class="btn" onclick="navTo('screen-main')" style="border-color: #ff3333; color: #ff3333;">← BACK</button>
+    </div>
+
+    <!-- 3. SETTINGS SCREEN -->
+    <div id="screen-settings" class="screen">
+        <h1>SYSTEM SETTINGS</h1>
+        <div class="slider-group">
+            <label>MASTER VOLUME: <span id="vol-val">80%</span></label>
+            <input type="range" min="0" max="100" value="80" oninput="document.getElementById('vol-val').innerText = this.value + '%'">
+        </div>
+        <div class="slider-group">
+            <label>SOUND EFFECTS: <span id="sfx-val">70%</span></label>
+            <input type="range" min="0" max="100" value="70" oninput="document.getElementById('sfx-val').innerText = this.value + '%'">
+        </div>
+        <button class="btn" onclick="navTo('screen-main')" style="margin-top: 40px;">← BACK</button>
+    </div>
+
+    <!-- 4. GAMEPLAY SCREEN -->
+    <div id="screen-game" class="screen">
+        <div class="hud">
+            <div>SCORE: <span id="hud-score">0</span></div>
+            <div>COINS: <span id="hud-coins">0</span></div>
+        </div>
+        
+        <div id="map-canvas">
+            <svg id="map-svg" width="100%" height="100%" viewBox="0 0 400 400" style="position:absolute; top:0; left:0; pointer-events:none;"></svg>
+            <div id="label-left" class="canvas-label" style="top: 25%; left: 15%;">COUNTRY A</div>
+            <div id="label-right" class="canvas-label" style="top: 25%; right: 15%;">COUNTRY B</div>
+        </div>
+
+        <div id="feedback">HOLD LEFT-CLICK TO DRAW BORDER</div>
+
+        <div class="controls">
+            <button class="btn" id="btn-hint" onclick="useHint()" style="font-size: 0.95rem; padding: 10px; margin-bottom: 5px;">BUY HINT (1000 COINS)</button>
+            <button class="btn" id="btn-next" onclick="nextLevel()" style="display: none; border-color: #00ff00; background: rgba(0,255,0,0.1);">NEXT LEVEL</button>
+            <button class="btn" onclick="exitGameSession()" style="border-color: #ff3333; color: #ff3333; font-size: 0.95rem; padding: 10px;">← BACK TO MENU</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let globalScore = 0;
+    let globalCoins = 0;
+    let currentLevelIndex = 0;
+    let isDrawing = false;
+    let hasDrawn = false;
+    let userPoints = [];
+    let savedScore = 0;
+    let savedCoins = 0;
+    let savedLevelIndex = 0;
+    let hasSavedGame = false;
+
+    const levels = [
+        {
+            leftName: "SPAIN", rightName: "PORTUGAL",
+            leftShape: "M 40,40 L 230,40 L 230,360 L 40,360 Z",
+            rightShape: "M 230,40 L 360,40 L 360,360 L 230,360 Z",
+            borderLine: "M 230,40 L 230,130 L 210,240 L 230,360"
+        },
+        {
+            leftName: "FRANCE", rightName: "GERMANY",
+            leftShape: "M 30,50 L 210,50 L 210,350 L 30,350 Z",
+            rightShape: "M 210,50 L 370,50 L 370,350 L 210,350 Z",
+            borderLine: "M 210,50 L 240,160 L 195,270 L 210,350"
+        },
+        {
+            leftName: "ITALY", rightName: "SWITZERLAND",
+            leftShape: "M 40,200 L 360,200 L 360,370 L 40,370 Z",
+            rightShape: "M 40,30 L 360,30 L 360,200 L 40,200 Z",
+            borderLine: "M 40,200 L 130,180 L 240,220 L 360,200"
+        }
+    ];
+
+    // Automatic Splash Screen Timer
+    setTimeout(() => {
+        navTo('screen-main');
+    }, 2500);
+
+    function navTo(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+
+    function shutdownGame() {
+        document.getElementById('game-container').innerHTML = "<h1 style='margin-top:45%; color:#ff3333; text-shadow:0 0 10px #ff0000;'>SYSTEM OFFLINE</h1><p style='color:#666;'>Mainframe connection terminated safely.</p>";
+    }
+
+    function startGame(isNewGame) {
+        if (isNewGame) {
+            globalScore = 0;
+            globalCoins = 0;
+            currentLevelIndex = 0;
+        } else if (hasSavedGame) {
+            globalScore = savedScore;
+            globalCoins = savedCoins;
+            currentLevelIndex = savedLevelIndex;
+        }
+        navTo('screen-game');
+        loadLevel();
+    }
+
+    function saveCurrentProgress() {
+        savedScore = globalScore;
+        savedCoins = globalCoins;
+        savedLevelIndex = currentLevelIndex;
+        hasSavedGame = true;
+        const contBtn = document.getElementById('btn-continue');
+        contBtn.style.opacity = "1";
+        contBtn.style.cursor = "pointer";
+        contBtn.removeAttribute('disabled');
+    }
+
+    function exitGameSession() {
+        saveCurrentProgress();
+        navTo('screen-play');
+    }
+
+    function loadLevel() {
+        hasDrawn = false;
+        isDrawing = false;
+        userPoints = [];
+        document.getElementById('hud-score').innerText = globalScore;
+        document.getElementById('hud-coins').innerText = globalCoins;
+        document.getElementById('btn-next').style.display = 'none';
+        document.getElementById('feedback').innerText = "HOLD LEFT-CLICK TO DRAW BORDER";
+        document.getElementById('feedback').style.color = "#ffff00";
+        
+        const currentLevel = levels[currentLevelIndex];
+        document.getElementById('label-left').innerText = currentLevel.leftName;
+        document.getElementById('label-right').innerText = currentLevel.rightName;
+
+        const svg = document.getElementById('map-svg');
+        svg.innerHTML = `
+            <path d="${currentLevel.leftShape}" fill="#081408" stroke="#004400" stroke-width="2"/>
+            <path d="${currentLevel.rightShape}" fill="#040c04" stroke="#004400" stroke-width="2"/>
+            <path id="true-border" d="${currentLevel.borderLine}" fill="none" stroke="#00ff00" stroke-width="4" stroke-dasharray="6,6" style="opacity: 0; transition: opacity 0.3s;"/>
+            <path id="user-border" d="" fill="none" stroke="#ff00ff" stroke-width="3"/>
+        `;
+    }
+
+    const canvas = document.getElementById('map-canvas');
+
+    function getCoords(e) {
+        const rect = canvas.getBoundingClientRect();
+        if (e.touches && e.touches.length > 0) {
+            return { x: e.touches.clientX - rect.left, y: e.touches.clientY - rect.top };
+        }
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    function startDraw(e) {
+        if (hasDrawn) return;
+        isDrawing = true;
+        const pt = getCoords(e);
